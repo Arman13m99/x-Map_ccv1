@@ -848,14 +848,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const value = e.target.value;
             radiusModifierValueEl.textContent = value;
             currentRadiusModifier = parseInt(value) / 100;
+            redrawVendorMarkersAndRadii();
+            fetchAndDisplayMapData();
         });
-        
+
         vendorRadiusFixedEl.addEventListener('input', (e) => {
             const value = e.target.value;
             radiusFixedValueEl.textContent = value;
             currentRadiusFixed = parseFloat(value);
+            redrawVendorMarkersAndRadii();
+            fetchAndDisplayMapData();
         });
-        
+
         btnResetRadius.addEventListener('click', () => {
             vendorRadiusModifierEl.value = "100";
             radiusModifierValueEl.textContent = "100";
@@ -863,6 +867,7 @@ document.addEventListener('DOMContentLoaded', () => {
             vendorRadiusFixedEl.value = "3";
             radiusFixedValueEl.textContent = "3";
             currentRadiusFixed = 3.0;
+            redrawVendorMarkersAndRadii();
             fetchAndDisplayMapData(); // Re-fetch to apply original radius
         });
         
@@ -1011,6 +1016,11 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // NEW: Add current zoom level to params for backend optimization
         params.append('zoom_level', map.getZoom().toString());
+
+        // Include current map center so backend cache can vary by viewport
+        const center = map.getCenter();
+        params.append('center_lat', center.lat.toFixed(5));
+        params.append('center_lng', center.lng.toFixed(5));
 
         getSelectedValuesFromCustomDropdown(customFilterConfigs.areaSubType)
             .forEach(val => params.append(customFilterConfigs.areaSubType.paramName, val));

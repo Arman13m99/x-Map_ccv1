@@ -22,6 +22,11 @@ class CoverageGridTask:
     city_name: str
     business_lines: List[str]
     vendor_filters: Dict[str, Any]
+    radius_modifier: float = 1.0
+    radius_mode: str = 'percentage'
+    radius_fixed: float = 3.0
+    center_lat: Optional[float] = None
+    center_lng: Optional[float] = None
     priority: int = 1  # 1 = highest, 5 = lowest
     created_at: datetime = None
     
@@ -142,24 +147,29 @@ class CoverageGridCacheManager:
             
         return max(1, min(5, priority))
     
-    def get_or_calculate_coverage_grid(self, 
+    def get_or_calculate_coverage_grid(self,
                                      city_name: str,
                                      business_lines: List[str],
                                      vendor_filters: Dict[str, Any],
                                      force_recalculate: bool = False,
                                      radius_modifier: float = 1.0,
                                      radius_mode: str = 'percentage',
-                                     radius_fixed: float = 3.0) -> Optional[List[Dict]]:
+                                     radius_fixed: float = 3.0,
+                                     center_lat: float = None,
+                                     center_lng: float = None) -> Optional[List[Dict]]:
         """Get coverage grid from cache or calculate if not available"""
         
         # Generate cache key including radius parameters
         radius_params = {
             'radius_modifier': radius_modifier,
-            'radius_mode': radius_mode, 
-            'radius_fixed': radius_fixed
+            'radius_mode': radius_mode,
+            'radius_fixed': radius_fixed,
+            'center_lat': round(center_lat, 5) if center_lat is not None else None,
+            'center_lng': round(center_lng, 5) if center_lng is not None else None
         }
-        extended_filters = {**vendor_filters, 'radius_params': radius_params}
-        cache_key = generate_cache_key(city_name, business_lines, extended_filters)
+        cache_key = generate_cache_key(
+            city_name, business_lines, vendor_filters, radius_params
+        )
         
         # Force recalculation if radius is modified (interactive user changes)
         is_radius_modified = (radius_mode == 'percentage' and radius_modifier != 1.0) or (radius_mode == 'fixed')
@@ -185,7 +195,11 @@ class CoverageGridCacheManager:
                 return cached_data
         
         # If not in cache, add to preload queue for future requests
-        self._add_to_preload_queue(city_name, business_lines, vendor_filters)
+        self._add_to_preload_queue(
+            city_name, business_lines, vendor_filters,
+            radius_modifier, radius_mode, radius_fixed,
+            center_lat, center_lng
+        )
         
         # Calculate immediately for this request
         logger.info(f"Calculating coverage grid for: {city_name}, BL: {business_lines}")
@@ -193,10 +207,11 @@ class CoverageGridCacheManager:
         
         if grid_data:
             # Cache the result
+            cache_filters = {**vendor_filters, **radius_params}
             self.db_manager.cache_coverage_grid(
-                cache_key, city_name, 
+                cache_key, city_name,
                 ','.join(business_lines) if business_lines else '',
-                vendor_filters, grid_data
+                cache_filters, grid_data
             )
             self._add_to_memory_cache(cache_key, grid_data)
             
@@ -419,21 +434,50 @@ class CoverageGridCacheManager:
             self.memory_cache[cache_key]['last_accessed'] = datetime.now()
             self.memory_cache[cache_key]['access_count'] += 1
     
-    def _add_to_preload_queue(self, city_name: str, business_lines: List[str], vendor_filters: Dict[str, Any]):
+    def _add_to_preload_queue(self, city_name: str, business_lines: List[str],
+                               vendor_filters: Dict[str, Any],
+                               radius_modifier: float = 1.0,
+                               radius_mode: str = 'percentage',
+                               radius_fixed: float = 3.0,
+                               center_lat: float = None,
+                               center_lng: float = None):
         """Add a coverage grid calculation to the preload queue"""
         task = CoverageGridTask(
             city_name=city_name,
             business_lines=business_lines,
             vendor_filters=vendor_filters,
+            radius_modifier=radius_modifier,
+            radius_mode=radius_mode,
+            radius_fixed=radius_fixed,
+            center_lat=center_lat,
+            center_lng=center_lng,
             priority=self._calculate_priority(city_name, business_lines, vendor_filters)
         )
-        
+
         with self.queue_lock:
             # Check if similar task already exists
-            cache_key = generate_cache_key(city_name, business_lines, vendor_filters)
-            existing_keys = [generate_cache_key(t.city_name, t.business_lines, t.vendor_filters) 
-                           for t in self.preload_queue]
-            
+            radius_params = {
+                'radius_modifier': radius_modifier,
+                'radius_mode': radius_mode,
+                'radius_fixed': radius_fixed,
+                'center_lat': round(center_lat, 5) if center_lat is not None else None,
+                'center_lng': round(center_lng, 5) if center_lng is not None else None
+            }
+            cache_key = generate_cache_key(city_name, business_lines, vendor_filters, radius_params)
+            existing_keys = [
+                generate_cache_key(
+                    t.city_name, t.business_lines, t.vendor_filters,
+                    {
+                        'radius_modifier': t.radius_modifier,
+                        'radius_mode': t.radius_mode,
+                        'radius_fixed': t.radius_fixed,
+                        'center_lat': round(t.center_lat, 5) if t.center_lat is not None else None,
+                        'center_lng': round(t.center_lng, 5) if t.center_lng is not None else None
+                    }
+                )
+                for t in self.preload_queue
+            ]
+
             if cache_key not in existing_keys:
                 self.preload_queue.append(task)
                 # Sort by priority
@@ -475,20 +519,32 @@ class CoverageGridCacheManager:
             if task:
                 try:
                     # Check if already cached
-                    cache_key = generate_cache_key(task.city_name, task.business_lines, task.vendor_filters)
-                    
+                    radius_params = {
+                        'radius_modifier': task.radius_modifier,
+                        'radius_mode': task.radius_mode,
+                        'radius_fixed': task.radius_fixed,
+                        'center_lat': round(task.center_lat, 5) if task.center_lat is not None else None,
+                        'center_lng': round(task.center_lng, 5) if task.center_lng is not None else None
+                    }
+                    cache_key = generate_cache_key(
+                        task.city_name, task.business_lines,
+                        task.vendor_filters, radius_params
+                    )
+
                     if not self.db_manager.get_cached_coverage_grid(cache_key):
                         logger.info(f"Preloading coverage grid: {task.city_name}, BL: {task.business_lines}")
-                        
+
                         grid_data = self._calculate_coverage_grid(
-                            task.city_name, task.business_lines, task.vendor_filters
+                            task.city_name, task.business_lines, task.vendor_filters,
+                            task.radius_modifier, task.radius_mode, task.radius_fixed
                         )
-                        
+
                         if grid_data:
+                            cache_filters = {**task.vendor_filters, **radius_params}
                             self.db_manager.cache_coverage_grid(
                                 cache_key, task.city_name,
                                 ','.join(task.business_lines) if task.business_lines else '',
-                                task.vendor_filters, grid_data
+                                cache_filters, grid_data
                             )
                             logger.info(f"Preloaded coverage grid: {cache_key[:8]}... ({len(grid_data)} points)")
                         else:
@@ -579,7 +635,12 @@ class CoverageGridCacheManager:
                 self.get_or_calculate_coverage_grid(
                     combo['city_name'],
                     combo['business_lines'],
-                    combo['vendor_filters']
+                    combo['vendor_filters'],
+                    radius_modifier=combo.get('radius_modifier', 1.0),
+                    radius_mode=combo.get('radius_mode', 'percentage'),
+                    radius_fixed=combo.get('radius_fixed', 3.0),
+                    center_lat=combo.get('center_lat'),
+                    center_lng=combo.get('center_lng')
                 )
             except Exception as e:
                 logger.error(f"Error warming up cache for {combo}: {e}")
