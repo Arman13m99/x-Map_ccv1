@@ -1,0 +1,768 @@
+/* styles.css (Complete updated file with enhanced heatmap controls) */
+
+/* --- Variables & Base --- */
+:root {
+    --primary-color: #2979FF; /* Vivid Blue */
+    --primary-hover-color: #1C54B2;
+    --secondary-color: #6c757d;
+    --secondary-hover-color: #545b62;
+    --success-color: #4CAF50; /* Green */
+    --success-hover-color: #388E3C;
+    --danger-color: #f44336; /* Red for warnings/errors */
+    
+    --light-bg: #F7F9FC; /* Very light grey for main background */
+    --content-bg: #FFFFFF; /* White for content areas like filters */
+    --sidebar-bg: #FFFFFF;
+    --text-dark: #263238; /* Dark blue-grey */
+    --text-light: #FFFFFF;
+    --text-muted: #78909C; /* Lighter grey for muted text */
+    --border-color: #CFD8DC; /* Light blue-grey border */
+    --border-radius-sm: 0.2rem;
+    --border-radius-md: 0.25rem;
+    --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+    --box-shadow-sm: 0 2px 4px rgba(0,0,0,0.05);
+    --box-shadow-md: 0 4px 8px rgba(0,0,0,0.07);
+    --box-shadow-lg: 0 10px 20px rgba(0,0,0,0.1);
+    --input-height: 2.25rem; /* Approx 36px */
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-family);
+    margin: 0;
+    background-color: var(--light-bg);
+    color: var(--text-dark);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden; /* Base overflow hidden, can be overridden by body.is-loading */
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+/* Loading State Styles */
+body.is-loading .dashboard-container > *:not(#map-loading-overlay-wrapper), /* Target direct children except wrapper */
+body.is-loading .btn-apply-fixed {
+    filter: blur(5px);
+    pointer-events: none;
+    transition: filter 0.2s ease-in-out;
+}
+
+body.is-loading {
+    overflow: hidden !important; /* Force no scroll when loading */
+}
+
+/* Wrapper for the loading overlay, distinct from map overlay */
+#map-loading-overlay-wrapper {
+    position: fixed; 
+    top: 0; 
+    left: 0; 
+    width: 100vw; 
+    height: 100vh; 
+    background-color: rgba(0, 0, 0, 0.3); 
+    z-index: 10000; 
+    display: flex; 
+    justify-content: center;
+    align-items: center;
+    font-size: 1.8em; 
+    color: #FFFFFF; 
+    font-weight: bold;
+    text-align: center;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.5); 
+    padding: 20px; 
+    box-sizing: border-box;
+    opacity: 0; 
+    visibility: hidden; 
+    transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out; 
+}
+
+#map-loading-overlay-wrapper.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Enhanced styles for heatmap controls */
+.sidebar-filters h4:has(+ .filter-item #heatmap-auto-optimize) {
+    color: var(--primary-color);
+    position: relative;
+}
+
+/* Visual indicator when heatmap auto-optimize is disabled */
+#heatmap-auto-optimize:not(.active) {
+    background-color: var(--secondary-color);
+    color: var(--text-light);
+}
+
+#heatmap-auto-optimize:not(.active) + small {
+    color: var(--secondary-color);
+}
+
+/* Enhanced button states for heatmap controls */
+#heatmap-auto-optimize.active,
+#heatmap-smooth-transitions.active {
+    background-color: var(--success-color);
+    color: var(--text-light);
+    border-color: var(--success-color);
+}
+
+#heatmap-auto-optimize.active:hover,
+#heatmap-smooth-transitions.active:hover {
+    background-color: var(--success-hover-color);
+    border-color: var(--success-hover-color);
+}
+
+/* Grid visualization controls styling */
+.sidebar-filters h4:has(+ #grid-blur) {
+    color: var(--primary-color);
+    position: relative;
+}
+
+/* Visual indicator when grid effects are active */
+#grid-blur:not([value="0"]) + label,
+#grid-fade:not([value="100"]) + label {
+    color: var(--primary-color);
+    font-weight: 600;
+}
+
+/* Radius mode controls */
+#radius-fixed-control,
+#radius-percentage-control {
+    transition: opacity 0.3s ease;
+}
+
+#radius-fixed-control[style*="display: none"],
+#radius-percentage-control[style*="display: none"] {
+    opacity: 0;
+}
+
+/* Enhanced button states for grid controls */
+#marketing-areas-on-top.active {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    font-weight: 600;
+}
+
+/* Grid pane transition for smooth effects */
+.leaflet-coverageGridPane-pane {
+    transition: filter 0.3s ease, opacity 0.3s ease;
+}
+
+/* Highlight active radius mode */
+#radius-mode-selector {
+    font-weight: 500;
+}
+
+#radius-mode-selector option[value="fixed"]:checked {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+}
+
+/* Enhanced small text styling for control descriptions */
+.filter-item small {
+    font-size: 0.7rem;
+    line-height: 1.3;
+    opacity: 0.8;
+}
+
+.filter-item small.heatmap-optimized {
+    color: var(--success-color);
+    font-weight: 500;
+}
+
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+/* --- Header --- */
+.header {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    padding: 0.8rem 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
+    box-shadow: var(--box-shadow-md);
+}
+
+.header h1 {
+    margin: 0 0 0.1em 0;
+    font-size: 1.5rem; 
+    font-weight: 600;
+}
+
+.header p {
+    margin: 0;
+    font-size: 0.85rem;
+    opacity: 0.9;
+}
+
+/* --- Filter Sections --- */
+.filters-top, .filters-maptype {
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0.75rem 1rem;
+    background-color: var(--content-bg);
+    border-bottom: 1px solid var(--border-color);
+    gap: 0.75rem 1rem; 
+    align-items: flex-start; 
+    flex-shrink: 0;
+}
+
+.filter-item {
+    display: flex;
+    flex-direction: column;
+    min-width: 150px; 
+}
+
+.filter-item-custom-dropdown {
+     min-width: 200px; 
+}
+
+.filter-item-textarea {
+    min-width: 220px;
+}
+
+.filter-item label {
+    font-size: 0.75rem; 
+    margin-bottom: 0.2rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-transform: uppercase; 
+}
+
+.filter-item select, 
+.filter-item input[type="date"], 
+.filter-item input[type="text"],
+.filter-item input[type="color"],
+.custom-checkbox-dropdown .dropdown-button {
+    padding: 0 0.75rem; 
+    height: var(--input-height);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    background-color: var(--content-bg);
+    font-size: 0.875rem;
+    color: var(--text-dark);
+    transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+    line-height: var(--input-height); 
+}
+
+.filter-item input[type="color"] {
+    padding: 0.1rem; 
+    width: 50px; 
+}
+
+.filter-item select:focus, 
+.filter-item input[type="date"]:focus,
+.filter-item input[type="text"]:focus,
+.custom-checkbox-dropdown .dropdown-button:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.15rem rgba(41, 121, 255, 0.25);
+}
+
+.filter-item textarea {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    background-color: var(--content-bg);
+    font-size: 0.875rem;
+    color: var(--text-dark);
+    font-family: var(--font-family);
+    min-height: calc(var(--input-height) * 1.5);
+    resize: vertical; 
+    line-height: 1.4; 
+}
+
+.filter-item textarea:focus {
+    border-color: var(--primary-color);
+    outline: 0;
+    box-shadow: 0 0 0 0.15rem rgba(41, 121, 255, 0.25);
+}
+
+/* Buttons General */
+button, .button {
+    padding: 0 1rem;
+    height: var(--input-height);
+    border: 1px solid transparent;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-align: center;
+    transition: background-color .15s ease-in-out, border-color .15s ease-in-out, color .15s ease-in-out;
+    line-height: calc(var(--input-height) - 2px); 
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-hover-color);
+    border-color: var(--primary-hover-color);
+}
+
+.btn-secondary {
+    background-color: var(--secondary-color);
+    color: var(--text-light);
+    border-color: var(--secondary-color);
+}
+
+.btn-secondary:hover {
+    background-color: var(--secondary-hover-color);
+    border-color: var(--secondary-hover-color);
+}
+
+.btn-toggle { 
+    background-color: var(--content-bg);
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+}
+
+.btn-toggle.active, .btn-toggle:hover {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+}
+
+.filters-maptype button { 
+    background-color: var(--content-bg);
+    color: var(--primary-color);
+    border: 1px solid var(--border-color); 
+}
+
+.filters-maptype button:hover {
+    background-color: #eef4ff; 
+    border-color: var(--primary-color);
+}
+
+.filters-maptype button.active-map-type {
+    background-color: var(--success-color);
+    color: var(--text-light);
+    border-color: var(--success-color);
+}
+
+.filters-maptype button.active-map-type:hover {
+    background-color: var(--success-hover-color);
+    border-color: var(--success-hover-color);
+}
+
+/* --- Main Content & Map --- */
+.main-content {
+    display: flex;
+    flex-grow: 1;
+    overflow: hidden; 
+    position: relative; 
+}
+
+#map {
+    flex-grow: 1;
+    height: 100%;
+    background-color: #e0e0e0; 
+}
+
+/* Map specific overlay for "No data" type messages if needed, different from global loading overlay */
+#map-nodata-overlay { 
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background-color: rgba(224, 224, 224, 0.7); /* Lighter, more subtle */
+    z-index: 1000; /* Below global loading, above map tiles */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 1.1em;
+    color: var(--text-muted);
+    font-weight: 500;
+    text-align: center;
+}
+
+/* --- Sidebar --- */
+.sidebar-filters {
+    width: 280px;
+    padding: 1rem;
+    background-color: var(--sidebar-bg);
+    border-left: 1px solid var(--border-color);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem; 
+    flex-shrink: 0;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.03); 
+}
+
+.sidebar-filters h4 {
+    margin: 0.5rem 0 0.3rem 0;
+    font-size: 0.9rem; 
+    font-weight: 600;
+    color: var(--text-dark);
+    text-transform: uppercase;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid #eee;
+}
+
+.sidebar-filters hr {
+    border: 0;
+    border-top: 1px dashed var(--border-color);
+    margin: 0.5rem 0;
+}
+
+.sidebar-filters .filter-item {
+    min-width: auto; 
+}
+
+.sidebar-filters .filter-item label.checkbox-label {
+    font-size: 0.85rem;
+    font-weight: normal;
+    color: var(--text-dark);
+    margin-left: 0.25rem;
+    vertical-align: middle;
+}
+
+.sidebar-filters .filter-item input[type="checkbox"]{
+    width: 15px; height: 15px;
+    vertical-align: middle;
+    margin-top: -1px; 
+}
+
+#vendor-radius-toggle { width: 100%; }
+
+/* --- Footer --- */
+.footer {
+    padding: 0.6rem 1rem;
+    background-color: var(--content-bg);
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    color: var(--text-muted);
+}
+
+.footer input[type="range"] { 
+    display: none; 
+}
+
+/* --- Custom Checkbox Dropdown --- */
+.custom-checkbox-dropdown {
+    position: relative;
+}
+
+.custom-checkbox-dropdown .dropdown-button {
+    display: flex; 
+    align-items: center;
+    justify-content: space-between; 
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    padding-right: 2rem; 
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.custom-checkbox-dropdown .dropdown-button::after { 
+    content: '▼';
+    font-size: 0.8em;
+    position: absolute;
+    right: 0.75rem; 
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    pointer-events: none; 
+}
+
+.custom-checkbox-dropdown .dropdown-button.open::after {
+    content: '▲';
+}
+
+.custom-checkbox-dropdown .dropdown-panel {
+    display: none;
+    position: absolute;
+    background-color: var(--content-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    margin-top: 2px; 
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1050; /* Ensure dropdown panel is above blurred content, but below main loader if open */
+    width: 100%;
+    min-width: 200px; 
+    box-shadow: var(--box-shadow-md);
+}
+
+.custom-checkbox-dropdown .dropdown-panel.open {
+    display: block;
+}
+
+.custom-checkbox-dropdown .dropdown-panel-item {
+    padding: 0.4rem 0.75rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.85rem;
+}
+
+.custom-checkbox-dropdown .dropdown-panel-item:last-child {
+    border-bottom: none;
+}
+
+.custom-checkbox-dropdown .dropdown-panel-item:hover {
+    background-color: #eef4ff;
+}
+
+.custom-checkbox-dropdown .dropdown-panel-item input[type="checkbox"] {
+    margin-right: 0.6rem;
+    width: 15px; height: 15px;
+    flex-shrink: 0;
+}
+
+.custom-checkbox-dropdown .dropdown-panel-item label { 
+    font-weight: normal;
+    color: var(--text-dark);
+    text-transform: none; 
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-grow: 1;
+    cursor: pointer; 
+    margin-bottom: 0; 
+}
+
+/* Leaflet Overrides */
+.leaflet-popup-content-wrapper {
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--box-shadow-lg);
+}
+
+.leaflet-popup-content {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.leaflet-popup-content b {
+    font-size: 0.95rem;
+    color: var(--primary-color);
+}
+
+/* Specific for range input labels with value */
+.sidebar-filters .filter-item label[for^="heatmap-"],
+.sidebar-filters .filter-item label[for^="grid-"],
+.sidebar-filters .filter-item label[for="vendor-marker-size"],
+.sidebar-filters .filter-item label[for^="vendor-radius"] {
+    display: flex;
+    justify-content: space-between; 
+    align-items: center;
+}
+
+.sidebar-filters .filter-item label span {
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.sidebar-filters input[type="range"] {
+    width: 100%; 
+    margin-top: 0.2rem;
+}
+
+/* Enhanced styling for range inputs */
+.sidebar-filters input[type="range"]:focus {
+    outline: none;
+}
+
+.sidebar-filters input[type="range"]::-webkit-slider-track {
+    background: var(--border-color);
+    height: 4px;
+    border-radius: 2px;
+}
+
+.sidebar-filters input[type="range"]::-webkit-slider-thumb {
+    background: var(--primary-color);
+    border: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+.sidebar-filters input[type="range"]::-moz-range-track {
+    background: var(--border-color);
+    height: 4px;
+    border-radius: 2px;
+    border: none;
+}
+
+.sidebar-filters input[type="range"]::-moz-range-thumb {
+    background: var(--primary-color);
+    border: none;
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    cursor: pointer;
+}
+
+/* Apply Button Fixed Style - Bottom Right */
+.btn-apply-fixed {
+    position: fixed;
+    bottom: 20px;
+    right: 20px; 
+    z-index: 1001; /* Above general content, potentially below dropdowns if they go very low */
+    min-width: 150px; 
+}
+
+/* --- Styles for new Lat/Lng Finder --- */
+.filter-item-group {
+    display: flex;
+    align-items: flex-end; /* Aligns button and inputs at the bottom */
+    gap: 0.75rem; /* Spacing between lat, lng, and button */
+    border-left: 2px solid var(--border-color);
+    padding-left: 1rem;
+    margin-left: 1rem;
+}
+
+.filter-item-group .filter-item {
+    min-width: 120px; /* Make the inputs a bit smaller */
+}
+
+.filter-item-group button {
+    height: var(--input-height); /* Match the input height */
+    flex-shrink: 0; /* Prevent the button from shrinking */
+}
+
+/* Enhanced transitions for smooth UI interactions */
+.btn-toggle {
+    transition: all 0.2s ease-in-out;
+}
+
+.btn-toggle.active {
+    transform: scale(1.02);
+}
+
+/* Enhanced focus states for accessibility */
+.btn-toggle:focus,
+.btn-primary:focus,
+.btn-secondary:focus {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+}
+
+/* Improved disabled states */
+button:disabled,
+.button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Enhanced loading states */
+.loading-pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
+/* Enhanced responsive design for smaller screens */
+@media (max-width: 768px) {
+    .sidebar-filters {
+        width: 100%;
+        max-height: 40vh;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .filters-top,
+    .filters-maptype {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .filter-item-group {
+        flex-direction: column;
+        align-items: stretch;
+        border-left: none;
+        padding-left: 0;
+        margin-left: 0;
+        border-top: 1px solid var(--border-color);
+        padding-top: 0.75rem;
+        margin-top: 0.75rem;
+    }
+}
+
+/* Enhanced scroll styling for sidebar */
+.sidebar-filters::-webkit-scrollbar {
+    width: 6px;
+}
+
+.sidebar-filters::-webkit-scrollbar-track {
+    background: var(--light-bg);
+}
+
+.sidebar-filters::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+.sidebar-filters::-webkit-scrollbar-thumb:hover {
+    background: var(--text-muted);
+}
+
+/* Enhanced tooltips */
+[title] {
+    position: relative;
+    cursor: help;
+}
+
+/* Grid section visibility - now always visible */
+#grid-visualization-section {
+    transition: all 0.3s ease-in-out;
+    overflow: visible;
+}
+
+/* Enhanced styling for grid controls */
+#grid-visualization-section h4 {
+    color: var(--primary-color);
+    font-size: 0.85rem;
+}
+
+#grid-visualization-section .filter-item:first-child small {
+    background-color: var(--light-bg);
+    padding: 0.5rem;
+    border-radius: var(--border-radius-sm);
+    border-left: 3px solid var(--primary-color);
+}
+
+/* Enhanced error states */
+.filter-item.error input,
+.filter-item.error select,
+.filter-item.error textarea {
+    border-color: var(--danger-color);
+    box-shadow: 0 0 0 0.15rem rgba(244, 67, 54, 0.25);
+}
+
+.filter-item.error label {
+    color: var(--danger-color);
+}
+
+/* Success states for completed actions */
+.filter-item.success input,
+.filter-item.success select,
+.filter-item.success textarea {
+    border-color: var(--success-color);
+    box-shadow: 0 0 0 0.15rem rgba(76, 175, 80, 0.25);
+}
+
+.filter-item.success label {
+    color: var(--success-color);
+}

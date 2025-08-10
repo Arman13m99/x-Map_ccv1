@@ -1,0 +1,72 @@
+# Optimized Tapsi Food Map Dashboard Requirements
+# Core dependencies - minimal and essential only
+
+# Web framework
+Flask==2.3.3
+flask-cors==4.0.0
+
+# Data processing
+pandas==2.0.3
+numpy==1.24.3
+scipy==1.11.4
+
+# Geospatial processing
+geopandas==0.13.2
+shapely==2.0.1
+
+# Scheduling and async
+schedule==1.2.0
+
+# HTTP requests
+requests==2.31.0
+
+# Performance optimizations
+ujson==5.8.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Production server (choose one based on your OS)
+# Linux/Unix:
+gunicorn==21.2.0
+
+# Windows:
+# waitress==2.1.2
+
+# Optional: Spatial indexing performance boost
+# Uncomment if you have system GEOS libraries installed:
+# rtree==1.0.1
+
+# =============================================================================
+# Installation Instructions:
+# =============================================================================
+# 
+# 1. Create virtual environment:
+#    python -m venv venv
+#    # Windows: venv\Scripts\activate
+#    # Linux/Mac: source venv/bin/activate
+#
+# 2. Install dependencies:
+#    pip install -r requirements.txt
+#
+# 3. For production on Windows, also install:
+#    pip install waitress
+#
+# 4. For spatial performance boost (if system libraries available):
+#    pip install rtree
+#
+# =============================================================================
+# System Requirements:
+# =============================================================================
+# 
+# The application uses SQLite (built into Python) and requires minimal system dependencies.
+# For full geospatial performance, optionally install:
+#
+# Ubuntu/Debian:
+#   sudo apt-get install libgdal-dev libspatialindex-dev libgeos-dev
+#
+# macOS:
+#   brew install gdal spatialindex geos
+#
+# Windows:
+#   Use conda-forge or pre-compiled wheels for geospatial libraries

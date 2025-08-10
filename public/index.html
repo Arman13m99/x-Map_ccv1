@@ -1,0 +1,263 @@
+<!-- index.html (Complete updated file with enhanced heatmap controls) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAPSI FOOD MAP DASHBOARD</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="header">
+            <h1>TAPSI FOOD MAP DASHBOARD</h1>
+            <p>BY BUSINESS GROWTH TEAM</p>
+        </header>
+        <div class="filters-top">
+             <div class="filter-item">
+                <label for="daterange-start">Date Range Start:</label>
+                <input type="date" id="daterange-start">
+            </div>
+            <div class="filter-item">
+                <label for="daterange-end">Date Range End:</label>
+                <input type="date" id="daterange-end">
+            </div>
+            <div class="filter-item">
+                <label for="city">City:</label>
+                <select id="city">
+                    <!-- Options populated by JS -->
+                </select>
+            </div>
+             <div class="filter-item">
+                <label for="area-main-type">Polygon Display Type:</label>
+                <select id="area-main-type">
+                    <option value="tapsifood_marketing_areas">TapsiFood Marketing Areas</option>
+                    <option value="tehran_region_districts">Tehran's Region Districts (22)</option>
+                    <option value="tehran_main_districts">Tehran's Main Districts (Many)</option>
+                    <option value="all_tehran_districts">All Tehran Districts</option>
+                    <option value="coverage_grid">Coverage Grid (200m)</option>
+                    <option value="none">None (Hide Polygons)</option>
+                </select>
+                <!-- --- MODIFIED: Added a helper note for the user --- -->
+                <small style="display: block; margin-top: 4px; color: var(--text-muted);">
+                    For Grid, toggle 'Marketing Areas on Top' in sidebar for context.
+                </small>
+            </div>
+            <div class="filter-item filter-item-custom-dropdown">
+                <label for="area-sub-type-filter-button">Polygon Sub Type:</label>
+                <div id="area-sub-type-filter-container" class="custom-checkbox-dropdown">
+                    <button type="button" class="dropdown-button" id="area-sub-type-filter-button">Select Sub Types</button>
+                    <div class="dropdown-panel" id="area-sub-type-filter-panel"></div>
+                </div>
+            </div>
+            <div class="filter-item filter-item-custom-dropdown">
+                <label for="business-line-filter-button">Business Line:</label>
+                <div id="business-line-filter-container" class="custom-checkbox-dropdown">
+                    <button type="button" class="dropdown-button" id="business-line-filter-button">Select Business Lines</button>
+                    <div class="dropdown-panel" id="business-line-filter-panel"></div>
+                </div>
+            </div>
+            <div class="filter-item filter-item-textarea">
+                <label for="vendor-codes-filter">Vendor Codes (comma/newline separated):</label>
+                <textarea id="vendor-codes-filter" rows="3" placeholder="e.g. 2wnok5, 271kr2
+or one per line"></textarea>
+            </div>
+            <div class="filter-item-group">
+                <div class="filter-item">
+                    <label for="lat-finder-input">Find Latitude:</label>
+                    <input type="text" id="lat-finder-input" placeholder="e.g. 35.7219">
+                </div>
+                <div class="filter-item">
+                    <label for="lng-finder-input">Find Longitude:</label>
+                    <input type="text" id="lng-finder-input" placeholder="e.g. 51.3347">
+                </div>
+                <button id="btn-find-location" class="btn-secondary">Show on Map</button>
+            </div>
+        </div>
+        <div class="filters-maptype">
+            <button id="btn-order-density-total">Total Order Density</button>
+            <button id="btn-order-density-organic">Organic Order Density</button>
+            <button id="btn-order-density-non-organic">Non-Organic Order Density</button>
+            <button id="btn-user-density-heatmap">User Density Heatmap</button>
+            <button id="btn-population-heatmap">Population Heatmap</button>
+            <button id="btn-vendors-map">Vendors Map</button>
+            <button id="btn-toggle-vendors" class="btn-toggle">Vendors On</button>
+            <button id="btn-clear-heatmap" class="btn-secondary">Clear Heatmap</button>
+        </div>
+        <div class="main-content">
+            <div id="map">
+                <div id="map-loading-overlay-wrapper" class="visible">LOADING ...</div>
+            </div>
+            <aside class="sidebar-filters">
+                <h4>Vendor Filters</h4>
+                <hr>
+                <div class="filter-item filter-item-custom-dropdown">
+                    <label for="vendor-grade-filter-button">Vendor Grade:</label>
+                    <div id="vendor-grade-filter-container" class="custom-checkbox-dropdown">
+                        <button type="button" class="dropdown-button" id="vendor-grade-filter-button">Select Grades</button>
+                        <div class="dropdown-panel" id="vendor-grade-filter-panel"></div>
+                    </div>
+                </div>
+                <div class="filter-item filter-item-custom-dropdown">
+                    <label for="vendor-status-filter-button">Vendor Status ID:</label>
+                    <div id="vendor-status-filter-container" class="custom-checkbox-dropdown">
+                        <button type="button" class="dropdown-button" id="vendor-status-filter-button">Select Statuses</button>
+                        <div class="dropdown-panel" id="vendor-status-filter-panel"></div>
+                    </div>
+                </div>
+                <div class="filter-item">
+                    <label for="vendor-visible">Vendor Visible:</label>
+                    <select id="vendor-visible">
+                        <option value="any">Any</option>
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </div>
+                <div class="filter-item">
+                    <label for="vendor-is-open">Vendor is Open:</label>
+                    <select id="vendor-is-open">
+                        <option value="any">Any</option>
+                        <option value="1">Yes</option>
+                        <option value="0">No</option>
+                    </select>
+                </div>
+                <hr>
+                <h4>Vendor Display</h4>
+                 <div class="filter-item">
+                    <label for="vendor-radius-toggle">Vendor Radius:</label>
+                    <button id="vendor-radius-toggle" class="btn-toggle">Hide Radius</button>
+                </div>
+                <!-- RADIUS MODIFIER CONTROLS -->
+                <div class="filter-item">
+                    <label for="radius-mode-selector">Radius Mode:</label>
+                    <select id="radius-mode-selector">
+                        <option value="percentage">Percentage</option>
+                        <option value="fixed">Fixed Value</option>
+                    </select>
+                </div>
+                <div class="filter-item" id="radius-percentage-control">
+                    <label for="vendor-radius-modifier">Radius Modifier: <span id="radius-modifier-value">100</span>%</label>
+                    <input type="range" id="vendor-radius-modifier" min="10" max="100" value="100" step="5">
+                </div>
+                <div class="filter-item" id="radius-fixed-control" style="display: none;">
+                    <label for="vendor-radius-fixed">Fixed Radius: <span id="radius-fixed-value">3</span> km</label>
+                    <input type="range" id="vendor-radius-fixed" min="0.5" max="10" value="3" step="0.5">
+                </div>
+                <div class="filter-item">
+                    <button id="btn-reset-radius" class="btn-secondary" style="width: 100%;">Reset Radius</button>
+                </div>
+                <hr>
+                <div class="filter-item">
+                    <label for="radius-edge-color">Radius Edge Color:</label>
+                    <input type="color" id="radius-edge-color" value="#E57373">
+                </div>
+                <div class="filter-item">
+                    <label for="radius-inner-color">Radius Fill Color:</label>
+                    <input type="color" id="radius-inner-color" value="#FFCDD2">
+                    <input type="checkbox" id="radius-inner-none" title="No inner fill">
+                    <label for="radius-inner-none" class="checkbox-label">None</label>
+                </div>
+                <div class="filter-item">
+                    <label for="vendor-marker-size">Marker Size: <span id="marker-size-value">12</span>px</label>
+                    <input type="range" id="vendor-marker-size" min="6" max="24" value="12" step="1">
+                </div>
+                <hr>
+                <h4>Area Display</h4>
+                 <div class="filter-item">
+                    <label for="area-fill-color">Area Fill Color:</label>
+                    <input type="color" id="area-fill-color" value="#90CAF9">
+                    <input type="checkbox" id="area-fill-none" title="No area fill">
+                    <label for="area-fill-none" class="checkbox-label">None</label>
+                </div>
+                <div id="grid-visualization-section" style="display: block;">
+                    <hr>
+                    <h4>Coverage Grid Controls (200m)</h4>
+                    <div class="filter-item">
+                        <small style="display: block; margin-bottom: 8px; color: var(--text-muted);">
+                            These controls only work when "Coverage Grid (200m)" is selected as Polygon Display Type above.
+                        </small>
+                    </div>
+                    <div class="filter-item">
+                        <label for="grid-blur">Grid Blur: <span id="grid-blur-value">0</span>px</label>
+                        <input type="range" id="grid-blur" min="0" max="10" value="0" step="1">
+                        <small style="display: block; margin-top: 2px; color: var(--text-muted);">
+                            Adds blur effect to grid points for better visualization
+                        </small>
+                    </div>
+                    <div class="filter-item">
+                        <label for="grid-fade">Grid Opacity: <span id="grid-fade-value">100</span>%</label>
+                        <input type="range" id="grid-fade" min="0" max="100" value="100" step="5">
+                        <small style="display: block; margin-top: 2px; color: var(--text-muted);">
+                            Controls transparency of the 200m coverage grid
+                        </small>
+                    </div>
+                    <div class="filter-item">
+                        <label for="marketing-areas-on-top">Marketing Areas Overlay:</label>
+                        <button id="marketing-areas-on-top" class="btn-toggle">Off</button>
+                        <small style="display: block; margin-top: 4px; color: var(--text-muted);">
+                            Shows marketing area boundaries on top of the grid for context
+                        </small>
+                    </div>
+                    <div class="filter-item">
+                        <label for="grid-point-size">Grid Point Size: <span id="grid-point-size-value">6</span>px</label>
+                        <input type="range" id="grid-point-size" min="3" max="12" value="6" step="1">
+                        <small style="display: block; margin-top: 2px; color: var(--text-muted);">
+                            Size of individual grid points (coverage circles)
+                        </small>
+                    </div>
+                </div>
+                <hr>
+                <h4>Heatmap Controls</h4>
+                <div class="filter-item">
+                    <label for="heatmap-auto-optimize">Auto-Optimize:</label>
+                    <button id="heatmap-auto-optimize" class="btn-toggle active">Auto-Optimize On</button>
+                    <small style="display: block; margin-top: 4px; color: var(--text-muted);">
+                        Automatically adjusts heatmap parameters based on zoom level and data distribution for consistent visualization.
+                    </small>
+                </div>
+                <div class="filter-item">
+                    <label for="heatmap-smooth-transitions">Smooth Transitions:</label>
+                    <button id="heatmap-smooth-transitions" class="btn-toggle active">Smooth On</button>
+                    <small style="display: block; margin-top: 4px; color: var(--text-muted);">
+                        Enables gradual parameter changes when zooming to prevent dramatic visual shifts.
+                    </small>
+                </div>
+                <div class="filter-item">
+                    <label for="heatmap-reset-params">Reset Parameters:</label>
+                    <button id="heatmap-reset-params" class="btn-secondary" style="width: 100%;">Reset to Optimal</button>
+                </div>
+                 <div class="filter-item">
+                    <label for="heatmap-radius">Radius (Density): <span id="heatmap-radius-value">25</span></label>
+                    <input type="range" id="heatmap-radius" min="5" max="60" value="25" step="1">
+                    <small style="display: block; margin-top: 2px; color: var(--text-muted);">
+                        Controls heat spread. Auto-adjusts with zoom when optimized.
+                    </small>
+                </div>
+                 <div class="filter-item">
+                    <label for="heatmap-blur">Blur: <span id="heatmap-blur-value">15</span></label>
+                    <input type="range" id="heatmap-blur" min="1" max="40" value="15" step="1">
+                    <small style="display: block; margin-top: 2px; color: var(--text-muted);">
+                        Smoothness of transitions. Auto-adjusts based on data density.
+                    </small>
+                </div>
+                 <div class="filter-item">
+                    <label for="heatmap-max-val">Max Intensity: <span id="heatmap-max-val-value">1.0</span></label>
+                    <input type="range" id="heatmap-max-val" min="0.1" max="3.0" value="1.0" step="0.1">
+                    <small style="display: block; margin-top: 2px; color: var(--text-muted);">
+                        Maximum color threshold. Auto-optimized to data distribution.
+                    </small>
+                </div>
+            </aside>
+        </div>
+        <footer class="footer">
+            <p>TAPSI FOOD MAP DASHBOARD</p>
+        </footer>
+    </div>
+    <button id="apply-filters-btn" class="btn-primary btn-apply-fixed">Apply All Filters</button>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="script.js"></script> 
+</body>
+</html>
