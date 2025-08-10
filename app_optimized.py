@@ -1,4 +1,4 @@
-# app_optimized.py - Optimized Flask application without coverage grid caching
+# app_optimized.py - Optimized Flask application with coverage grid caching
 import os
 import logging
 import threading
@@ -23,6 +23,7 @@ import hashlib
 from config import Config, get_config
 from models import DatabaseManager, generate_cache_key
 from scheduler import DataScheduler, init_scheduler
+from cache_manager import CoverageGridCacheManager, init_cache_manager, get_cache_manager
 
 # Setup logging
 logging.basicConfig(
@@ -45,6 +46,7 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600
 # Global instances (initialized in create_app)
 db_manager: Optional[DatabaseManager] = None
 scheduler: Optional[DataScheduler] = None
+coverage_cache: Optional[CoverageGridCacheManager] = None
 
 # Polygon data (loaded once at startup)
 gdf_marketing_areas = {}
@@ -814,7 +816,7 @@ def load_polygon_data():
 
 def create_app() -> Flask:
     """Create and configure the Flask application"""
-    global db_manager, scheduler
+    global db_manager, scheduler, coverage_cache
     
     logger.info("Initializing optimized Tapsi Food Map Dashboard...")
     
@@ -829,6 +831,11 @@ def create_app() -> Flask:
     scheduler = init_scheduler(config, db_manager)
     scheduler.start()
     logger.info("Data scheduler started")
+
+    # Initialize coverage grid cache manager
+    coverage_cache = init_cache_manager(config, db_manager)
+    if config.PRELOAD_COVERAGE_GRIDS:
+        coverage_cache.start_preloading()
     
     # Add debug endpoint
     @app.route('/api/debug-globals', methods=['GET'])
@@ -982,11 +989,14 @@ def get_map_data():
         selected_polygon_sub_types = [s.strip() for s in request.args.getlist('area_sub_type_filter') if s.strip()]
         
         zoom_level = request.args.get('zoom_level', default=11, type=float)
-        
+
         # Radius modifier parameters
         radius_modifier = request.args.get('radius_modifier', default=1.0, type=float)
         radius_mode = request.args.get('radius_mode', default='percentage', type=str)
         radius_fixed = request.args.get('radius_fixed', default=3.0, type=float)
+
+        center_lat = request.args.get('center_lat', type=float)
+        center_lng = request.args.get('center_lng', type=float)
         
         # Force recalculate parameter
         force_recalculate = request.args.get('force_recalculate', default=False, type=bool)
@@ -1056,7 +1066,7 @@ def get_map_data():
         else:
             logger.info(f"No heatmap condition matched. Type: '{heatmap_type_req}', City: '{city_name}'")
         
-        # Process coverage grid (calculate directly without caching)
+        # Process coverage grid
         if area_type_display == "coverage_grid":
             vendor_filters = {
                 'status_ids': selected_vendor_status_ids,
@@ -1064,12 +1074,26 @@ def get_map_data():
                 'visible': vendor_visible,
                 'is_open': vendor_is_open
             }
-            
-            logger.info(f"Calculating coverage grid directly with radius_modifier={radius_modifier}, radius_mode={radius_mode}")
-            coverage_grid_data = calculate_coverage_grid_direct(
-                city_name, selected_business_lines, vendor_filters,
-                radius_modifier, radius_mode, radius_fixed
-            ) or []
+
+            cache_mgr = coverage_cache or get_cache_manager()
+            if cache_mgr:
+                coverage_grid_data = cache_mgr.get_or_calculate_coverage_grid(
+                    city_name, selected_business_lines, vendor_filters,
+                    force_recalculate=force_recalculate,
+                    radius_modifier=radius_modifier,
+                    radius_mode=radius_mode,
+                    radius_fixed=radius_fixed,
+                    center_lat=center_lat,
+                    center_lng=center_lng
+                ) or []
+            else:
+                logger.info(
+                    f"Calculating coverage grid directly with radius_modifier={radius_modifier}, radius_mode={radius_mode}"
+                )
+                coverage_grid_data = calculate_coverage_grid_direct(
+                    city_name, selected_business_lines, vendor_filters,
+                    radius_modifier, radius_mode, radius_fixed
+                ) or []
         
         # Process polygons
         if area_type_display != "none" and area_type_display != "coverage_grid":

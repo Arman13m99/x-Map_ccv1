@@ -1017,6 +1017,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // NEW: Add current zoom level to params for backend optimization
         params.append('zoom_level', map.getZoom().toString());
 
+        // Include current map center so backend cache can vary by viewport
+        const center = map.getCenter();
+        params.append('center_lat', center.lat.toFixed(5));
+        params.append('center_lng', center.lng.toFixed(5));
+
         getSelectedValuesFromCustomDropdown(customFilterConfigs.areaSubType)
             .forEach(val => params.append(customFilterConfigs.areaSubType.paramName, val));
         getSelectedValuesFromCustomDropdown(customFilterConfigs.businessLine)
