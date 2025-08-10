@@ -1,4 +1,4 @@
-# cache_manager.py - Fixed preloading combinations
+# cache_manager.py - Fixed radius modifications for coverage grid
 import json
 import hashlib
 import logging
@@ -317,25 +317,32 @@ class CoverageGridCacheManager:
             return [(None, None)] * len(points)
     
     def _apply_radius_modifications(self, vendors_df: pd.DataFrame, radius_modifier: float, radius_mode: str, radius_fixed: float) -> pd.DataFrame:
-        """Apply radius modifications to vendors DataFrame"""
+        """Apply radius modifications to vendors DataFrame - FIXED VERSION"""
         if vendors_df.empty or 'radius' not in vendors_df.columns:
             return vendors_df
             
         vendors_modified = vendors_df.copy()
         
         if radius_mode == 'percentage':
-            # Apply percentage modifier (e.g., 0.5 = 50% of original radius)
-            vendors_modified['radius'] = vendors_df['radius'] * radius_modifier
+            # FIXED: Use original_radius if available, otherwise fall back to radius
+            # This ensures consistent modifications from the original radius values
+            base_radius = vendors_df.get('original_radius', vendors_df['radius'])
+            vendors_modified['radius'] = base_radius * radius_modifier
+            
+            if radius_modifier != 1.0:
+                logger.info(f"Applied {radius_modifier*100:.0f}% radius modifier to {len(vendors_modified)} vendors using {'original_radius' if 'original_radius' in vendors_df.columns else 'radius'} as base")
+                
         elif radius_mode == 'fixed':
             # Set all vendors to fixed radius
             vendors_modified['radius'] = radius_fixed
-        
-        # Log the radius modification for debugging
-        if radius_mode == 'percentage' and radius_modifier != 1.0:
-            logger.info(f"Applied {radius_modifier*100:.0f}% radius modifier to {len(vendors_modified)} vendors")
-        elif radius_mode == 'fixed':
             logger.info(f"Set fixed radius {radius_fixed}km for {len(vendors_modified)} vendors")
             
+        # Add debug logging to show radius changes
+        if 'original_radius' in vendors_df.columns and radius_mode == 'percentage' and radius_modifier != 1.0:
+            original_avg = vendors_df['original_radius'].mean()
+            modified_avg = vendors_modified['radius'].mean()
+            logger.debug(f"Average radius changed from {original_avg:.2f}km to {modified_avg:.2f}km")
+        
         return vendors_modified
     
     def _process_coverage_results(self, 

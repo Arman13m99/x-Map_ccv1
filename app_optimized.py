@@ -1,4 +1,4 @@
-# app_optimized.py - Optimized Flask application with database and caching
+# app_optimized.py - Optimized Flask application without coverage grid caching
 import os
 import logging
 import threading
@@ -23,7 +23,6 @@ import hashlib
 from config import Config, get_config
 from models import DatabaseManager, generate_cache_key
 from scheduler import DataScheduler, init_scheduler
-from cache_manager import CoverageGridCacheManager, init_cache_manager
 
 # Setup logging
 logging.basicConfig(
@@ -46,7 +45,6 @@ app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600
 # Global instances (initialized in create_app)
 db_manager: Optional[DatabaseManager] = None
 scheduler: Optional[DataScheduler] = None
-cache_manager: Optional[CoverageGridCacheManager] = None
 
 # Polygon data (loaded once at startup)
 gdf_marketing_areas = {}
@@ -139,6 +137,28 @@ def generate_coverage_grid(city_name: str, grid_size_meters: int = 200) -> List[
     
     return grid_points
 
+def apply_radius_modifications_to_vendors(vendors_df: pd.DataFrame, radius_modifier: float, radius_mode: str, radius_fixed: float) -> pd.DataFrame:
+    """Apply radius modifications to vendors DataFrame"""
+    if vendors_df.empty or 'radius' not in vendors_df.columns:
+        return vendors_df
+        
+    vendors_modified = vendors_df.copy()
+    
+    if radius_mode == 'percentage':
+        # Use original_radius if available, otherwise fall back to radius
+        base_radius = vendors_df.get('original_radius', vendors_df['radius'])
+        vendors_modified['radius'] = base_radius * radius_modifier
+        
+        if radius_modifier != 1.0:
+            logger.info(f"Applied {radius_modifier*100:.0f}% radius modifier to {len(vendors_modified)} vendors")
+            
+    elif radius_mode == 'fixed':
+        # Set all vendors to fixed radius
+        vendors_modified['radius'] = radius_fixed
+        logger.info(f"Set fixed radius {radius_fixed}km for {len(vendors_modified)} vendors")
+        
+    return vendors_modified
+
 def calculate_coverage_for_grid_vectorized(grid_points: List[Dict], 
                                          df_vendors_filtered: pd.DataFrame, 
                                          city_name: str) -> List[Dict]:
@@ -229,7 +249,7 @@ def calculate_coverage_for_grid_vectorized(grid_points: List[Dict],
     
     return coverage_results
 
-def find_marketing_area_for_points(points: List[Dict], city_name: str) -> List[Tuple[Optional[str], Optional[str]]]:
+def find_marketing_areas_for_points(points: List[Dict], city_name: str) -> List[Tuple[Optional[str], Optional[str]]]:
     """Find which marketing area each point belongs to using spatial indexing"""
     if city_name not in gdf_marketing_areas or gdf_marketing_areas[city_name].empty:
         return [(None, None)] * len(points)
@@ -278,6 +298,111 @@ def find_marketing_area_for_points(points: List[Dict], city_name: str) -> List[T
                 results.append((None, None))
     
     return results
+
+def calculate_coverage_grid_direct(city_name: str, 
+                                 business_lines: List[str],
+                                 vendor_filters: Dict[str, Any],
+                                 radius_modifier: float = 1.0,
+                                 radius_mode: str = 'percentage',
+                                 radius_fixed: float = 3.0) -> List[Dict]:
+    """Calculate coverage grid directly without caching"""
+    try:
+        logger.info(f"Calculating coverage grid directly for: {city_name}, BL: {business_lines}, radius_mode: {radius_mode}, modifier: {radius_modifier}")
+        
+        # Get filtered vendors from database
+        bl_filter = None if business_lines == ["All"] else business_lines
+        
+        vendors_df = db_manager.get_vendors(
+            city_name=city_name,
+            business_lines=bl_filter,
+            status_ids=vendor_filters.get('status_ids'),
+            grades=vendor_filters.get('grades'),
+            visible=vendor_filters.get('visible'),
+            is_open=vendor_filters.get('is_open')
+        )
+        
+        if vendors_df.empty:
+            logger.warning(f"No vendors found for city: {city_name}, BL: {business_lines}, filters: {vendor_filters}")
+            return []
+        
+        logger.info(f"Found {len(vendors_df)} vendors for coverage calculation")
+        
+        # Generate grid points
+        grid_points = generate_coverage_grid(city_name, config.GRID_SIZE_METERS)
+        if not grid_points:
+            logger.warning(f"No grid points generated for city: {city_name}")
+            return []
+        
+        logger.info(f"Generated coverage grid with {len(grid_points)} points (200m spacing)")
+        
+        # Apply radius modifications to vendors BEFORE calculating coverage
+        vendors_df = apply_radius_modifications_to_vendors(vendors_df, radius_modifier, radius_mode, radius_fixed)
+        
+        # Find marketing areas for points
+        point_area_info = find_marketing_areas_for_points(grid_points, city_name)
+        
+        # Calculate coverage
+        coverage_results = calculate_coverage_for_grid_vectorized(grid_points, vendors_df, city_name)
+        
+        # Process results with target-based logic if applicable
+        processed_grid_data = process_coverage_results_with_targets(
+            coverage_results, point_area_info, business_lines, city_name
+        )
+        
+        logger.info(f"Calculated coverage grid: {len(processed_grid_data)} points with coverage")
+        return processed_grid_data
+        
+    except Exception as e:
+        logger.error(f"Error calculating coverage grid: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return []
+
+def process_coverage_results_with_targets(coverage_results: List[Dict],
+                                        point_area_info: List[Tuple],
+                                        business_lines: List[str],
+                                        city_name: str) -> List[Dict]:
+    """Process coverage results with target-based analysis"""
+    processed_data = []
+    
+    # Load target lookup if available
+    target_lookup = {}
+    if city_name == "tehran" and business_lines and len(business_lines) == 1:
+        try:
+            target_lookup = db_manager.get_target_lookup_dict('tehran')
+            logger.info(f"Loaded target lookup for {city_name}: {len(target_lookup)} targets")
+        except Exception as e:
+            logger.error(f"Failed to load target lookup: {e}")
+            target_lookup = {}
+    
+    for i, coverage in enumerate(coverage_results):
+        if coverage['total_vendors'] > 0:
+            area_id, area_name = point_area_info[i] if i < len(point_area_info) else (None, None)
+            
+            point_data = {
+                'lat': coverage['lat'],
+                'lng': coverage['lng'],
+                'coverage': coverage,
+                'marketing_area': area_name
+            }
+            
+            # Add target-based analysis if applicable
+            if target_lookup and area_id and len(business_lines) == 1:
+                target_key = (area_id, business_lines[0])
+                if target_key in target_lookup:
+                    target_value = target_lookup[target_key]
+                    actual_value = coverage['by_business_line'].get(business_lines[0], 0)
+                    
+                    point_data.update({
+                        'target_business_line': business_lines[0],
+                        'target_value': target_value,
+                        'actual_value': actual_value,
+                        'performance_ratio': (actual_value / target_value) if target_value > 0 else 2.0
+                    })
+            
+            processed_data.append(point_data)
+    
+    return processed_data
 
 def generate_improved_heatmap_data(heatmap_type_req: str, 
                                  df_orders_filtered: pd.DataFrame, 
@@ -689,7 +814,7 @@ def load_polygon_data():
 
 def create_app() -> Flask:
     """Create and configure the Flask application"""
-    global db_manager, scheduler, cache_manager
+    global db_manager, scheduler
     
     logger.info("Initializing optimized Tapsi Food Map Dashboard...")
     
@@ -700,19 +825,10 @@ def create_app() -> Flask:
     # Load polygon data
     load_polygon_data()
     
-    # Initialize cache manager
-    cache_manager = init_cache_manager(config, db_manager)
-    logger.info("Cache manager initialized")
-    
     # Initialize and start scheduler
     scheduler = init_scheduler(config, db_manager)
     scheduler.start()
     logger.info("Data scheduler started")
-    
-    # Start cache preloading if enabled
-    if config.PRELOAD_COVERAGE_GRIDS:
-        cache_manager.start_preloading()
-        logger.info("Coverage grid preloading started")
     
     # Add debug endpoint
     @app.route('/api/debug-globals', methods=['GET'])
@@ -891,12 +1007,9 @@ def get_map_data():
             is_open=vendor_is_open
         )
         
-        # Apply radius modifications
+        # Apply radius modifications to vendors for display
         if not df_vendors_filtered.empty and 'radius' in df_vendors_filtered.columns:
-            if radius_mode == 'fixed':
-                df_vendors_filtered['radius'] = radius_fixed
-            else:
-                df_vendors_filtered['radius'] = df_vendors_filtered.get('original_radius', df_vendors_filtered['radius']) * radius_modifier
+            df_vendors_filtered = apply_radius_modifications_to_vendors(df_vendors_filtered, radius_modifier, radius_mode, radius_fixed)
         
         # Get filtered orders from database
         # NOTE: Orders in DB have city_name='nan', so we filter by city_id after fetching
@@ -943,20 +1056,18 @@ def get_map_data():
         else:
             logger.info(f"No heatmap condition matched. Type: '{heatmap_type_req}', City: '{city_name}'")
         
-        # Process coverage grid (use cache manager)
+        # Process coverage grid (calculate directly without caching)
         if area_type_display == "coverage_grid":
             vendor_filters = {
                 'status_ids': selected_vendor_status_ids,
                 'grades': selected_vendor_grades,
                 'visible': vendor_visible,
-                'is_open': vendor_is_open,
-                'radius_modifier': radius_modifier,
-                'radius_mode': radius_mode,
-                'radius_fixed': radius_fixed
+                'is_open': vendor_is_open
             }
             
-            coverage_grid_data = cache_manager.get_or_calculate_coverage_grid(
-                city_name, selected_business_lines, vendor_filters, force_recalculate,
+            logger.info(f"Calculating coverage grid directly with radius_modifier={radius_modifier}, radius_mode={radius_mode}")
+            coverage_grid_data = calculate_coverage_grid_direct(
+                city_name, selected_business_lines, vendor_filters,
                 radius_modifier, radius_mode, radius_fixed
             ) or []
         
@@ -1186,9 +1297,6 @@ def get_cache_stats():
     try:
         stats = {}
         
-        if cache_manager:
-            stats['coverage_cache'] = cache_manager.get_cache_stats()
-        
         if db_manager:
             stats['database'] = db_manager.get_database_stats()
         
@@ -1204,11 +1312,17 @@ def clear_cache():
     try:
         cache_type = request.json.get('type', 'all')
         
-        if cache_manager:
-            cache_manager.clear_cache(cache_type)
-            return jsonify({"message": f"Cache cleared: {cache_type}"})
-        else:
-            return jsonify({"error": "Cache manager not available"}), 500
+        if cache_type in ("all", "database"):
+            try:
+                with db_manager.get_connection() as conn:
+                    conn.execute("DELETE FROM coverage_grid_cache")
+                    conn.execute("DELETE FROM heatmap_cache")
+                    conn.commit()
+                    logger.info("Cleared database cache")
+            except Exception as e:
+                logger.error(f"Error clearing database cache: {e}")
+            
+        return jsonify({"message": f"Cache cleared: {cache_type}"})
             
     except Exception as e:
         logger.error(f"Error clearing cache: {e}")
@@ -1241,6 +1355,4 @@ if __name__ == '__main__':
         # Cleanup on shutdown
         if scheduler:
             scheduler.stop()
-        if cache_manager:
-            cache_manager.stop_preloading()
         logger.info("Application shutdown complete")

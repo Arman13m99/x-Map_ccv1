@@ -33,7 +33,7 @@ class Config:
     
     # Performance settings
     ENABLE_QUERY_OPTIMIZATION: bool = True
-    PRELOAD_COVERAGE_GRIDS: bool = False  # Temporarily disabled to test target data
+    PRELOAD_COVERAGE_GRIDS: bool = False  # Disabled - coverage grid calculated directly without caching
     ENABLE_COMPRESSION: bool = True
     
     # Scheduler settings
@@ -75,7 +75,7 @@ class Config:
         # Boolean environment variables
         self.FLASK_DEBUG = os.getenv("FLASK_DEBUG", "false").lower() in ("true", "1", "yes")
         self.ENABLE_QUERY_OPTIMIZATION = os.getenv("ENABLE_QUERY_OPTIMIZATION", "true").lower() in ("true", "1", "yes")
-        self.PRELOAD_COVERAGE_GRIDS = os.getenv("PRELOAD_COVERAGE_GRIDS", "true").lower() in ("true", "1", "yes")
+        self.PRELOAD_COVERAGE_GRIDS = os.getenv("PRELOAD_COVERAGE_GRIDS", "false").lower() in ("true", "1", "yes")  # Default to False
         self.ENABLE_COMPRESSION = os.getenv("ENABLE_COMPRESSION", "true").lower() in ("true", "1", "yes")
         
         # String environment variables
@@ -96,7 +96,7 @@ class ProductionConfig(Config):
     WORKER_COUNT = 12  # More workers for production
     PAGE_SIZE = 150000  # Larger page size for production
     ENABLE_COMPRESSION = True
-    PRELOAD_COVERAGE_GRIDS = True
+    PRELOAD_COVERAGE_GRIDS = False  # Disabled - direct calculation is more responsive
 
 class TestingConfig(Config):
     """Testing environment configuration"""
